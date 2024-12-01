@@ -1,0 +1,73 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+# URL of the page to scrape
+url = "https://www.faredetective.com/farehistory/flights-to-Denver-DEN.html"
+
+# Fetch the webpage content
+response = requests.get(url)
+
+# Check if the page was fetched successfully
+if response.status_code == 200:
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Print the page title to ensure the page was fetched correctly
+    page_title = soup.title.get_text()
+    print(f"Page Title: {page_title}")
+    print("=" * 40)
+    
+    # Try to find the flight price history table using the correct class
+    flight_table = soup.find('table', class_="table table-history")
+    
+    if flight_table:
+        # Initialize lists to hold the flight names, prices, and additional columns
+        flight_links = []
+        departure_dates = []
+        flight_durations = []
+        airlines = []
+
+        # Extract flight names and links
+        for link in flight_table.find_all('a', href=True):
+            if link.text:
+                flight_links.append(link['href'])
+        
+        # Extract the price data from the table rows
+        price_data = flight_table.find_all(class_="text-right")
+        price_list = [price.get_text() for price in price_data]
+
+        # Extract the departure date, flight duration, and airline information from the table
+        departure_date_data = flight_table.find_all('td', class_="departure-date")
+        duration_data = flight_table.find_all('td', class_="duration")
+        airline_data = flight_table.find_all('td', class_="airline")
+
+        # Clean and extract the respective data
+        departure_dates = [date.get_text().strip() for date in departure_date_data] if departure_date_data else ['N/A'] * len(price_list)
+        flight_durations = [duration.get_text().strip() for duration in duration_data] if duration_data else ['N/A'] * len(price_list)
+        airlines = [airline.get_text().strip() for airline in airline_data] if airline_data else ['N/A'] * len(price_list)
+
+        # Clean the price data (extract only numeric digits)
+        clean_prices = ["".join(char for char in price if char.isdigit()) for price in price_list]
+
+        # Clean the flight names (remove unnecessary hyphens and extra characters)
+        flight_names = [link.replace('-', ' ') for link in flight_links]
+
+        # Create a DataFrame to hold the flight data
+        flight_df = pd.DataFrame({
+            "Flight Name": flight_names[:len(price_list)],  # Ensure flight names align with price data
+            "Price": clean_prices,  # Corresponding flight prices
+            "Departure Date": departure_dates,  # Departure date for each flight
+            "Flight Duration": flight_durations,  # Flight duration
+            "Airline": airlines  # Airline name
+        })
+
+        # Display the scraped data
+        print(flight_df)
+
+        # Optionally, save the data to a CSV file
+        flight_df.to_csv("flight_price_history_with_more_columns.csv", index=False)
+        print("\nData has been successfully saved to 'flight_price_history_with_more_columns.csv'.")
+    else:
+        print("Could not find the flight price history table on the page.")
+else:
+    print(f"Failed to retrieve the webpage. Status code: {response.status_code}")
